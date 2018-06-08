@@ -1,0 +1,227 @@
+#define U08 uint8_t
+#define U16 uint16_t
+#define BOOL uint8_t
+
+#define COMPOSE_2CHARS(high_char,low_char)	(unsigned int)((high_char<<8)+low_char)
+#define HIBYTE(x)	(((unsigned int)(x))>>8)
+#define LOBYTE(x)	(((unsigned int)(x))&0xff)
+
+#define MAX_VALUE(a,b)    (((a) > (b)) ? (a) : (b))
+#define MIN_VALUE(a,b)    (((a) < (b)) ? (a) : (b))
+
+union INT_CHAR{
+    U16 i;
+    U08 j[2];		/*	j[0]:i(0~7)	j[1]:i(8~15)	*/
+};
+union INT_CHAR g_KeyCode;
+#define KEY_MASK	g_KeyCode.j[0]
+#define KEY_CODE	g_KeyCode.j[1]
+
+#define KEY_STAT_NULL		0xff
+#define KEY_STAT_RELEASE	0xfe
+#define KEY_STAT_LONG		0xfd
+#define KEY_STAT_SHORT		0xfc
+#define KEY_STAT_LIANXU		0xfb
+#define KEY_STAT_PRESS		0xfa
+
+enum KEY_ID{
+KID_PWR,
+KID_INC,
+KID_DEC,
+
+KID_K1,
+KID_K2,
+KID_K3,
+KID_K4,
+KID_K5,
+KID_K6,
+KID_K7,
+KID_K8,
+
+KID_NULL,
+};
+
+#define IO_KEY_NUM		256
+const U08 tblIoKey[IO_KEY_NUM] = {
+/*0000000*/	KID_NULL,
+/*0000001*/	KID_NULL,
+/*0000010*/	KID_NULL,
+/*0000011*/	KID_NULL,
+/*0000100*/	KID_NULL,
+/*0000101*/	KID_NULL,
+/*0000110*/	KID_NULL,
+/*0000111*/	KID_NULL,
+/*0001000*/	KID_NULL,
+/*0001001*/	KID_NULL,
+/*0001010*/	KID_NULL,
+/*0001011*/	KID_NULL,
+/*0001100*/	KID_NULL,
+/*0001101*/	KID_NULL,
+/*0001110*/	KID_NULL,
+/*0001111*/	KID_NULL,
+
+/*0010000*/	KID_NULL,
+/*0010001*/	KID_NULL,
+/*0010010*/	KID_NULL,
+/*0010011*/	KID_NULL,
+/*0010100*/	KID_NULL,
+/*0010101*/	KID_NULL,
+/*0010110*/	KID_NULL,
+/*0010111*/	KID_NULL,
+/*0011000*/	KID_NULL,
+/*0011001*/	KID_NULL,
+/*0011010*/	KID_NULL,
+/*0011011*/	KID_NULL,
+/*0011100*/	KID_NULL,
+/*0011101*/	KID_NULL,
+/*0011110*/	KID_NULL,
+/*0011111*/	KID_NULL,
+
+};
+
+// IO port definition
+#define IO_GPIO_PORT	(GPIOB)
+#define IO_GPIO_PIN_0	(GPIO_PIN_2)
+#define IO_GPIO_PIN_1	(GPIO_PIN_3)
+#define IO_GPIO_PIN_2	(GPIO_PIN_4)
+#define IO_GPIO_PIN_3	(GPIO_PIN_5)
+#define IO_GPIO_PIN_4	(GPIO_PIN_1)
+#define IO_GPIO_PIN_5	(GPIO_PIN_0)
+#define IO_GPIO_PINS	(IO_GPIO_PIN_5 |IO_GPIO_PIN_4 |IO_GPIO_PIN_3 | IO_GPIO_PIN_2 | IO_GPIO_PIN_1 | IO_GPIO_PIN_0)
+
+#define IO_GPIO2_PORT		(GPIOC)
+#define IO_GPIO2_PIN_0	(GPIO_PIN_1)
+#define IO_GPIO2_PIN_1	(GPIO_PIN_2)
+#define IO_GPIO2_PINS		(IO_GPIO2_PIN_1 | IO_GPIO2_PIN_0)
+
+#define KEY_SCAN_FOSC			10
+#define C_LIANXU_FST_TMR		(500/KEY_SCAN_FOSC)
+#define C_LIANXU_LST_TMR		(150/KEY_SCAN_FOSC)
+#define C_LONG_TMR				(1200/KEY_SCAN_FOSC)
+U08 KeyTmrLianxu;
+U08 KeyTmrLong;
+
+BOOL bIoKeyPressed;
+BOOL bIoKeyPressed_1;
+static U08 IoKeyCode;
+static U08 IoKeyPressTmr;
+
+void KeyInit(void)
+{
+  GPIO_Init(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PINS, GPIO_MODE_IN_PU_NO_IT);
+  GPIO_Init(IO_GPIO2_PORT, (GPIO_Pin_TypeDef)IO_GPIO2_PINS, GPIO_MODE_IN_PU_NO_IT);
+}
+
+void GetIoKeyCode(void)
+{
+	#define JUDGE_COUNT		3
+	U08 ioKeyTmp = 0;
+	static U08 ioKeyCnt = 0;
+	static U08 ioKeyArray[JUDGE_COUNT];
+
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_0) )
+		ioKeyTmp |= 0x01;
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_1) )
+		ioKeyTmp |= 0x02;
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_2) )
+		ioKeyTmp |= 0x04;
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_3) )
+		ioKeyTmp |= 0x08;
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_4) )
+		ioKeyTmp |= 0x10;
+	if( !GPIO_ReadInputPin(IO_GPIO_PORT, (GPIO_Pin_TypeDef)IO_GPIO_PIN_5) )
+		ioKeyTmp |= 0x20;
+	if( !GPIO_ReadInputPin(IO_GPIO2_PORT, (GPIO_Pin_TypeDef)IO_GPIO2_PIN_0) )
+		ioKeyTmp |= 0x40;
+	if( !GPIO_ReadInputPin(IO_GPIO2_PORT, (GPIO_Pin_TypeDef)IO_GPIO2_PIN_1) )
+		ioKeyTmp |= 0x80;
+
+	ioKeyArray[ioKeyCnt] = ioKeyTmp;
+
+	if(++ioKeyCnt >= JUDGE_COUNT)
+	{
+		ioKeyCnt = 0;
+
+		if( ( ioKeyArray[0] == ioKeyArray[1] )
+			&& ( ioKeyArray[0] == ioKeyArray[2] )
+			&& ( ioKeyArray[0] != 0 )
+			)
+		{
+			bIoKeyPressed = 1;
+			IoKeyPressTmr = 0;
+
+			IoKeyCode = ioKeyArray[0];
+//			printf("\r\n io key code is %x \r\n", IoKeyCode);
+		}
+		else
+		{
+//			IoKeyCode = 0;
+		}
+	}
+
+}
+
+void ScanKey(void)
+/*	place this function in main()'s while(1) cycle and delay's function	*/
+{
+	if(KeyTmrLianxu>1)	--KeyTmrLianxu;
+	if(KeyTmrLong>1)		--KeyTmrLong;
+
+
+#define C_IO_KEY_PRESS_TMR		(70/KEY_SCAN_FOSC)			//	70ms
+	if( (++IoKeyPressTmr) >= C_IO_KEY_PRESS_TMR)		bIoKeyPressed = 0;
+	GetIoKeyCode();
+
+}
+
+U16 KeyEncode(void)
+/*	deal this function per 10ms	*/
+{
+U16 key_code;
+U08 tmp;
+
+	ScanKey();
+
+	key_code = COMPOSE_2CHARS(KEY_STAT_NULL,KID_NULL);
+
+	if( (bIoKeyPressed||bIoKeyPressed_1)
+		)
+	{
+		tmp = tblIoKey[IoKeyCode];
+	}
+
+	if(bIoKeyPressed)
+	{
+		if(bIoKeyPressed_1 == 0)
+		{
+			bIoKeyPressed_1 = 1;
+			KeyTmrLianxu = C_LIANXU_FST_TMR+1;
+			KeyTmrLong = C_LONG_TMR+1;
+			key_code = COMPOSE_2CHARS(KEY_STAT_PRESS,tmp);
+		}
+		else
+		{
+			if(KeyTmrLong == 1)
+			{
+				KeyTmrLong = 0;
+				key_code = COMPOSE_2CHARS(KEY_STAT_LONG,tmp);
+			}
+			else if(KeyTmrLianxu == 1)
+			{
+				KeyTmrLianxu = C_LIANXU_LST_TMR+1;
+				key_code = COMPOSE_2CHARS(KEY_STAT_LIANXU,tmp);
+			}
+		}
+	}
+	else if(bIoKeyPressed_1)
+	{
+		bIoKeyPressed_1 = 0;
+		if(KeyTmrLong==0)	key_code = COMPOSE_2CHARS(KEY_STAT_RELEASE,tmp);
+		else				key_code = COMPOSE_2CHARS(KEY_STAT_SHORT,tmp);
+	}
+
+	return key_code;
+}
+
+
+

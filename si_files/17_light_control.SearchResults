@@ -1,0 +1,5 @@
+---- BuleOn Matches (5 in 3 files) ----
+E_deal_key.c (e_src):		case KID_K1:		if(led_blue_static)	BuleOn(0);else	BuleOn(1);			g_RedLedTimer = RED_LED_TIMEROUT;			break;
+E_main.c (e_src):void BuleOn(uint8_t flag)
+E_main.c (e_src):	BuleOn(1);
+E_on_timer.c (e_src):					BuleOn(1);
